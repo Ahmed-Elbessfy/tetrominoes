@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tetrominoes</title>
+    <style>
+      .container {
+        display: grid;
+        grid-gap: 1rem;
+        width: 22rem;
+        padding: 1rem;
+        margin: auto;
+      }
+      .upper {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+        place-items: center;
+      }
+      .grid {
+        width: 20rem;
+        height: 40rem;
+        display: grid;
+        grid-template-columns: repeat(10, 1fr);
+        grid-template-rows: repeat(20, 1fr);
+        padding: 5px;
+        margin: auto;
+        background: rgb(0, 46, 139);
+      }
+      .grid span {
+        background: rgb(192, 227, 239);
+      }
+      .nextTetroDisplay {
+        background: yellow;
+        height: 8rem;
+        width: 8rem;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: repeat(4, 1fr);
+        padding: 5px;
+        margin: auto;
+      }
+      span.taken {
+        background-color: purple;
+      }
+      span.tetro {
+        background-color: rgb(0, 46, 139);
+      }
+      span.next {
+        background-color: rgb(5, 146, 57);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="upper">
+        <div>
+          <button id="start">Start / Pause</button>
+          <h1>Score : <span id="score"></span></h1>
+        </div>
+        <div class="nextTetroDisplay"></div>
+      </div>
+      <div class="grid"></div>
+    </div>
+    <script>
+      const grid = document.querySelector(".grid"),
+        nextDisplay = document.querySelector(".nextTetroDisplay"),
+        startBtn = document.querySelector("#start"),
+        scoreDisplay = document.querySelector("#score");
+
+      const gw = 10, // grid_width
+        gh = 20, // grid_height
+        totalSquares = gh * gw,
+        nextW = 4, // next_width
+        nextH = 4, // next_height
+        totalNextSquares = nextH * nextW;
+      let tetrosInterval = null,
+        startIndex = 4,
+        currentTetro = [],
+        nextTetro = [],
+        rotation = 0,
+        random = Math.floor(Math.random() * 5), // 5 number of tetros
+        nextRandom = Math.floor(Math.random() * 5), // 5 is number of tetros
+        score = 0,
+        playing = false,
+        possibleWinningLines = [];
+
+      // create grid
+      for (let i = 0; i < totalSquares; i++) {
+        let span = document.createElement("span");
+        grid.appendChild(span);
+      }
+
+      // create next grid
+      for (let i = 0; i < totalNextSquares; i++) {
+        let span = document.createElement("span");
+        nextDisplay.appendChild(span);
+      }
+
+      // display initial score
+      scoreDisplay.textContent = score;
+
+      const squares = document.querySelectorAll(".grid span"),
+        nextSquares = document.querySelectorAll(".nextTetroDisplay span");
+
+      // tetrominoes shapes and rotations
+      const tetros = (width, randomNum, rot) => {
+        let tetroArr = [
+          [
+            [1, 2, width + 1, 2 * width + 1],
+            [0, width, width + 1, width + 2],
+            [1, width + 1, 2 * width + 1, 2 * width],
+            [0, 1, 2, width + 2],
+          ],
+          [
+            [0, 1, width, width + 1],
+            [0, 1, width, width + 1],
+            [0, 1, width, width + 1],
+            [0, 1, width, width + 1],
+          ],
+          [
+            [0, 1, width + 1, width + 2],
+            [2, width + 1, width + 2, 2 * width + 1],
+            [0, 1, width + 1, width + 2],
+            [2, width + 1, width + 2, 2 * width + 1],
+          ],
+          [
+            [0, 1, 2, 3],
+            [1, width + 1, 2 * width + 1, 3 * width + 1],
+            [0, 1, 2, 3],
+            [1, width + 1, 2 * width + 1, 3 * width + 1],
+          ],
+          [
+            [1, width, width + 1, width + 2],
+            [1, width + 1, 2 * width + 1, width + 2],
+            [0, 1, 2, width + 1],
+            [1, width, width + 1, 2 * width + 1],
+          ],
+        ];
+        return tetroArr[randomNum][rot];
+      };
+
+      // undraw currentTetro
+      const undraw = () => {
+        document
+          .querySelectorAll(".tetro")
+          .forEach((n) => n.classList.remove("tetro"));
+      };
+      // draw currentTetro
+      const draw = () => {
+        undraw();
+        currentTetro.forEach((n) =>
+          squares[n + startIndex].classList.add("tetro")
+        );
+      };
+
+      // prevent tetro from moving outside grid boundary on rotation
+      const preventOutBoundariesRotation = () => {
+        // right edge
+        if (startIndex % gw == gw - 2) {
+          if (random == 3) {
+            // case of lTetro
+            startIndex -= 2;
+          } else {
+            startIndex--;
+          }
+        }
+        // left edge
+        if (startIndex % gw == gw - 1) {
+          startIndex++;
+        }
+      };
+      // rotate currentTetro
+      const rotate = () => {
+        undraw();
+        rotation++;
+        preventOutBoundariesRotation();
+        if (rotation > currentTetro.length - 1) rotation = 0;
+        currentTetro = tetros(gw, random, rotation);
+        // currentTetro = tetros[random][rotation];
+        draw();
+      };
+
+      // tetro reach bottom of the grid
+      const reachEnd = () => {
+        undraw(); // remove tetro class
+        // add taken class and store each taken square index as id
+        currentTetro.forEach((n) => {
+          squares[n + startIndex].classList.add("taken");
+          squares[n + startIndex].setAttribute("id", n + startIndex);
+        });
+        // set next currentTetro to match next displayed tetro in nextDisplay
+        random = nextRandom;
+        startIndex = 4;
+        rotation = 0;
+        currentTetro = tetros(gw, random, rotation);
+        draw(); // draw the new tetro at top of the grid
+        // remove nextTetro displayed in nextDisplay area
+        document
+          .querySelectorAll(".nextTetroDisplay .next")
+          .forEach((n) => n.classList.remove("next"));
+        // reset nextTetro
+        nextRandom = Math.floor(Math.random() * 5);
+        // draw nextTetro in nextDisplay area
+        displayNext();
+      };
+      // move currentTetro down
+      const mvDown = () => {
+        undraw();
+        startIndex += gw;
+        draw();
+        // if tetro reaches bottom or next square is already taken
+        if (
+          currentTetro.some(
+            (n) =>
+              (n + startIndex >= gw * (gh - 1) && n + startIndex < gw * gh) ||
+              squares[n + startIndex + gw].classList.contains("taken")
+          )
+        ) {
+          reachEnd();
+        }
+      };
+
+      // create an array of rows to check if all contained squares are taken
+      const createPossibleWinningLines = () => {
+        for (let i = currentTetro.length; i < gh; i++) {
+          let arr = Array.from(Array(gw), (x, j) => j + i * gw);
+          possibleWinningLines.push(arr);
+        }
+      };
+
+      // what happens when all squares of one row are taken
+      const oneLineTaken = (row) => {
+        // increase score with grid width value (( taken squares ))
+        score += row.length;
+        scoreDisplay.textContent = score;
+        // remove taken row
+        // remove taken class and id attribute from all taken squares
+        row.forEach((n) => {
+          squares[n].classList.remove("taken");
+          squares[n].removeAttribute("id");
+        });
+        // array to select all taken squares before the taken row
+        // by storing taken squares ids which are less than taken row array first item
+        let takenIds = [];
+
+        //loop through all taken squares
+        document.querySelectorAll(".taken").forEach((m) => {
+          // if taken square id less than taken row array first item
+          if (parseInt(m.id) < row[0]) {
+            // remove taken class to move it down
+            m.classList.remove("taken");
+            // store taken square id in takenIds array
+            takenIds.push(parseInt(m.id) + gw);
+            // remove id attribute to prevent duplication in case of multiple rows taken in one move
+            m.removeAttribute("id");
+          } else {
+            // stop looping when taken square id > taken row first item to prevent unnecessary execution
+            return;
+          }
+        });
+
+        // redraw taken squares but in the next line of their previous location
+        // after removing taken row
+        takenIds.forEach((n) => {
+          // add taken class
+          squares[n].classList.add("taken");
+          // add the new id
+          squares[n].setAttribute("id", n);
+        });
+      };
+
+      // Winning case
+      const winCase = () => {
+        for (let i = 0; i < possibleWinningLines.length; i++) {
+          // check if any of the possible winning lines is all taken
+          if (
+            possibleWinningLines[i].every((m) =>
+              squares[m].classList.contains("taken")
+            )
+          ) {
+            oneLineTaken(possibleWinningLines[i]);
+          }
+        }
+      };
+
+      // Losing case
+      const loseCase = () => {
+        // if any new tetro can't move down because all next squares are taken
+        if (
+          startIndex < gw &&
+          currentTetro.some((n) =>
+            squares[n + startIndex + gw].classList.contains("taken")
+          )
+        ) {
+          clearInterval(tetrosInterval);
+          alert("You Lost! Better Luck Next Time");
+          document.removeEventListener("keydown", control);
+          // reset game state:
+          // remove class attribute from all spans
+          // remove taken squares ids
+          // reset score
+          // set playing to false
+          document.querySelectorAll("span").forEach((n) => {
+            n.removeAttribute("class");
+            n.removeAttribute("id");
+          });
+          playing = false;
+          score = 0;
+          scoreDisplay.textContent = score;
+        }
+      };
+
+      // move currentTetro left
+      const mvLeft = () => {
+        // if currentTetro didn't reach left edge
+        if (!currentTetro.some((n) => (n + startIndex) % gw == 0)) {
+          undraw();
+          startIndex--;
+          draw();
+        }
+      };
+
+      // move currentTetro right
+      const mvRight = () => {
+        // if currentTetro didn't reach right edge
+        if (!currentTetro.some((n) => (n + startIndex) % gw == gw - 1)) {
+          undraw();
+          startIndex++;
+          draw();
+        }
+      };
+
+      // keyboard controls
+      const control = (e) => {
+        if (e.keyCode == 37) mvLeft();
+        if (e.keyCode == 39) mvRight();
+        if (e.keyCode == 40) mvDown();
+        if (e.keyCode == 32) rotate();
+      };
+
+      // draw nextTetro
+      const displayNext = () => {
+        nextTetro = tetros(nextW, nextRandom, 0);
+        nextTetro.forEach((n) => nextSquares[n].classList.add("next"));
+      };
+      // startGame function
+      const startGame = () => {
+        // if not playing >> playing == false
+        if (!playing) {
+          playing = true;
+          // draw currentTetro
+          draw();
+          // draw nextTetro
+          displayNext();
+          createPossibleWinningLines();
+          tetrosInterval = setInterval(() => {
+            mvDown();
+            winCase();
+            loseCase();
+          }, 1000);
+          // start listening to keyboard clicks
+          document.addEventListener("keydown", control);
+        } else {
+          // stop interval
+          clearInterval(tetrosInterval);
+          // stop listening to keyboard clicks
+          document.removeEventListener("keydown", control);
+          playing = false;
+        }
+      };
+
+      document.addEventListener("DOMContentLoaded", () => {
+        // set currentTetro first shape
+        currentTetro = tetros(gw, random, rotation);
+        // start listening to start button clicks
+        startBtn.addEventListener("click", startGame);
+        // start game on clicking on Enter
+        document.addEventListener("keydown", (e) => {
+          if (e.keyCode === 13) startGame();
+        });
+      });
+    </script>
+  </body>
+</html>
